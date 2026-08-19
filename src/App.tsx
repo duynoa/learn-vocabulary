@@ -106,8 +106,14 @@ function App() {
       </aside>
       {mobileNav && <button aria-label="Đóng menu" className="fixed inset-0 z-20 bg-[#17231f]/20 lg:hidden" onClick={() => setMobileNav(false)} />}
       <main className="lg:ml-[252px]">
-        <header className="flex h-[76px] items-center justify-between border-b border-[#e3e8df] bg-[#f9faf6]/80 px-5 backdrop-blur lg:px-10"><button className="rounded-lg p-2 hover:bg-[#edf2e9] lg:hidden" onClick={() => setMobileNav(true)}><Menu size={21} /></button><div className="hidden text-sm font-medium text-[#7b8880] lg:block">Chào mừng bạn quay trở lại!</div><div className="ml-auto flex items-center gap-4"><div className="hidden items-center gap-2 rounded-full bg-[#fff3d6] px-3 py-2 text-sm font-bold text-[#b47e23] sm:flex"><Flame size={16} fill="currentColor" /> 5 ngày</div><div className="grid h-9 w-9 place-items-center rounded-full bg-[#2b4538] text-sm font-bold text-white">A</div></div></header>
-        <div className="mx-auto max-w-[1420px] px-5 py-8 lg:px-10 lg:py-10">
+        <header className="flex h-fit items-center justify-between border-b border-[#e3e8df] bg-[#f9faf6]/80 px-5 backdrop-blur lg:px-10">
+          <button className="rounded-lg p-2 hover:bg-[#edf2e9] lg:hidden" onClick={() => setMobileNav(true)}><Menu size={21} /></button>
+          <div className="hidden text-sm font-medium text-[#7b8880] lg:block">Chào mừng bạn quay trở lại!</div>
+          <div className="ml-auto flex items-center gap-4">
+            <div className="hidden items-center gap-2 rounded-full bg-[#fff3d6] px-3 py-2 text-sm font-bold text-[#b47e23] sm:flex"><Flame size={16} fill="currentColor" /> 5 ngày</div>
+          </div>
+        </header>
+        <div className="mx-auto max-w-[1420px] px-5 py-5 lg:px-10 lg:py-10">
           {error && <div className="mb-5 flex items-center justify-between rounded-xl border border-[#f1d3cb] bg-[#fff2ed] px-4 py-3 text-sm text-[#a34e39]"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
           {page === 'dashboard' && <Dashboard words={words} mastered={mastered} learning={learning} accuracy={accuracy} onStudy={startStudy} onLibrary={() => setPage('library')} progressMap={progressMap} />}
           {page === 'library' && <LibraryPage words={words} search={search} setSearch={setSearch} onSelect={setSelectedWord} progressMap={progressMap} />}
@@ -162,7 +168,7 @@ function WordCard({ word, progress, onClick }: { word: Word; progress?: Progress
   );
 }
 
-function Flashcards({ words, progressMap, onProgress }: { words: Word[]; progressMap: Map<string, Progress> ; onProgress: (word: Word, correct: boolean) => Promise<void> }) {
+function Flashcards({ words, progressMap, onProgress }: { words: Word[]; progressMap: Map<string, Progress>; onProgress: (word: Word, correct: boolean) => Promise<void> }) {
   const studyWords = words.filter((word) => progressMap.get(word.id)?.status !== 'mastered');
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
