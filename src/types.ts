@@ -7,8 +7,6 @@ export type NewWord = {
   meaning_vi: string;
   example_en: string;
   example_vi: string;
-  category: string;
-  level: string;
 };
 
 export type Word = {
@@ -19,9 +17,7 @@ export type Word = {
   meaning_vi: string;
   example_en: string | null;
   example_vi: string | null;
-  category: string;
-  level: string;
-  image_url: string | null;
+  image_url?: string | null;
 };
 
 export type Progress = {

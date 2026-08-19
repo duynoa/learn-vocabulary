@@ -10,8 +10,6 @@
   - `meaning_vi` (text, Vietnamese translation)
   - `example_en` (text, example sentence in English)
   - `example_vi` (text, example sentence translated to Vietnamese)
-  - `category` (text, topic category e.g. Food, Travel, Business)
-  - `level` (text, CEFR level: A1, A2, B1, B2, C1)
   - `image_url` (text, optional image for the word)
   - `created_at` (timestamp)
 - `progress`: tracks the learner's progress on each word
@@ -27,11 +25,6 @@
 2. Security
 - Enable RLS on both tables.
 - Allow anon + authenticated CRUD because this is a single-tenant shared learning app with no sign-in.
-
-3. Notes
-- Uses a simple status model: new -> learning -> mastered.
-- Progress is keyed by word_id (one progress row per word).
-- No user_id since there is no auth in this app.
 */
 
 CREATE TABLE IF NOT EXISTS words (
@@ -42,14 +35,9 @@ CREATE TABLE IF NOT EXISTS words (
   meaning_vi text NOT NULL,
   example_en text,
   example_vi text,
-  category text NOT NULL DEFAULT 'General',
-  level text NOT NULL DEFAULT 'A1',
   image_url text,
   created_at timestamptz DEFAULT now()
 );
-
-CREATE INDEX IF NOT EXISTS idx_words_category ON words(category);
-CREATE INDEX IF NOT EXISTS idx_words_level ON words(level);
 
 CREATE TABLE IF NOT EXISTS progress (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
