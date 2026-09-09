@@ -48,7 +48,7 @@ export function FlashcardsPage() {
 
       <button
         onClick={() => setFlipped((current) => !current)}
-        className="group relative mb-6 flex min-h-[390px] w-full items-center justify-center overflow-hidden rounded-3xl bg-[#263f31] p-10 text-center text-white shadow-2xl shadow-[#263f31]/20 transition hover:-translate-y-1"
+        className="group relative mb-3 flex min-h-[390px] w-full items-center justify-center overflow-hidden rounded-3xl bg-[#263f31] p-10 text-center text-white shadow-2xl shadow-[#263f31]/20 transition hover:-translate-y-1"
       >
         <div className="absolute right-8 top-8 h-24 w-24 rounded-full border border-white/10" />
         <div className="absolute bottom-[-40px] left-[-30px] h-40 w-40 rounded-full border border-[#d9f36b]/15" />
