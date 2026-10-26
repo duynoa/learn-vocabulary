@@ -239,13 +239,13 @@ export function AiGenerateModal({
               <span className="flex items-center gap-1.5 text-[#517a2a] font-medium">
                 <Check size={14} /> Gemini API Key đã sẵn sàng
               </span>
-              <button
+              {/* <button
                 type="button"
                 onClick={() => setShowKeyInput(true)}
                 className="font-semibold text-[#6e8529] hover:underline"
               >
                 Đổi API Key
-              </button>
+              </button> */}
             </div>
           )}
 
