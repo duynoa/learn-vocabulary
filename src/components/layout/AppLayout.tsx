@@ -17,6 +17,7 @@ import { useVocabulary } from '@/context/VocabularyContext';
 import { WordModal } from '../modals/WordModal';
 import { WordFormModal } from '../modals/WordFormModal';
 import { ConfirmDeleteModal } from '../modals/ConfirmDeleteModal';
+import { AiGenerateModal } from '../modals/AiGenerateModal';
 
 export function AppLayout() {
   const {
@@ -33,9 +34,15 @@ export function AppLayout() {
     setEditingWord,
     deletingWord,
     setDeletingWord,
+    words,
     isAddModalOpen,
     setIsAddModalOpen,
+    isAiModalOpen,
+    setIsAiModalOpen,
+    aiInitialTopic,
+    setAiInitialTopic,
     addWord,
+    addWordsBatch,
     updateWord,
     deleteWord,
   } = useVocabulary();
@@ -158,6 +165,11 @@ export function AppLayout() {
             setSelectedWord(null);
             setDeletingWord(word);
           }}
+          onGenerateRelated={(word) => {
+            setSelectedWord(null);
+            setAiInitialTopic(word.word);
+            setIsAiModalOpen(true);
+          }}
         />
       )}
 
@@ -171,6 +183,21 @@ export function AppLayout() {
           showToast(`Đã thêm "${input.word}" vào thư viện!`);
           setIsAddModalOpen(false);
         }}
+      />
+
+      {/* Modal Tạo từ vựng thông minh bằng Gemini AI */}
+      <AiGenerateModal
+        isOpen={isAiModalOpen}
+        onClose={() => {
+          setIsAiModalOpen(false);
+          setAiInitialTopic('');
+        }}
+        initialTopic={aiInitialTopic}
+        existingWordNames={words.map((w) => w.word)}
+        onSaveWords={async (newWords) => {
+          await addWordsBatch(newWords);
+        }}
+        showToast={showToast}
       />
 
       {/* Modal Chỉnh sửa từ vựng */}

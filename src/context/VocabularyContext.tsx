@@ -17,6 +17,7 @@ interface VocabularyContextType {
   toast: string;
   showToast: (msg: string) => void;
   addWord: (input: NewWord) => Promise<Word>;
+  addWordsBatch: (inputs: NewWord[]) => Promise<Word[]>;
   updateWord: (id: string, input: NewWord) => Promise<Word>;
   deleteWord: (id: string) => Promise<void>;
   updateWordProgress: (word: Word, correct: boolean) => Promise<void>;
@@ -30,6 +31,10 @@ interface VocabularyContextType {
   setDeletingWord: (word: Word | null) => void;
   isAddModalOpen: boolean;
   setIsAddModalOpen: (open: boolean) => void;
+  isAiModalOpen: boolean;
+  setIsAiModalOpen: (open: boolean) => void;
+  aiInitialTopic: string;
+  setAiInitialTopic: (topic: string) => void;
 }
 
 const VocabularyContext = createContext<VocabularyContextType | undefined>(undefined);
@@ -46,6 +51,8 @@ export function VocabularyProvider({ children }: { children: React.ReactNode }) 
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [deletingWord, setDeletingWord] = useState<Word | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiInitialTopic, setAiInitialTopic] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -158,6 +165,23 @@ export function VocabularyProvider({ children }: { children: React.ReactNode }) 
     return created;
   }
 
+  async function addWordsBatch(inputs: NewWord[]) {
+    if (inputs.length === 0) return [];
+    const payload = inputs.map((input) => ({
+      word: input.word.trim(),
+      pronunciation: input.pronunciation?.trim() || null,
+      part_of_speech: input.part_of_speech?.trim() || null,
+      meaning_vi: input.meaning_vi.trim(),
+      example_en: input.example_en?.trim() || null,
+      example_vi: input.example_vi?.trim() || null,
+    }));
+    const { data, error: insertError } = await supabase.from('words').insert(payload).select();
+    if (insertError) throw insertError;
+    const created = (data ?? []) as Word[];
+    setWords((current) => [...created, ...current]);
+    return created;
+  }
+
   async function updateWord(id: string, input: NewWord) {
     const payload = {
       word: input.word.trim(),
@@ -214,6 +238,11 @@ export function VocabularyProvider({ children }: { children: React.ReactNode }) 
         setDeletingWord,
         isAddModalOpen,
         setIsAddModalOpen,
+        isAiModalOpen,
+        setIsAiModalOpen,
+        aiInitialTopic,
+        setAiInitialTopic,
+        addWordsBatch,
       }}
     >
       {children}

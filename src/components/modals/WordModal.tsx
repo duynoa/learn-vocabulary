@@ -1,4 +1,4 @@
-import { Headphones, Pencil, Trash2, X } from 'lucide-react';
+import { Headphones, Pencil, Sparkles, Trash2, X } from 'lucide-react';
 import type { Progress, Word } from '@/types';
 import { speak } from '@/utils/speech';
 import { getRemainingReviewTime } from '@/utils/srs';
@@ -9,12 +9,14 @@ export function WordModal({
   onClose,
   onEdit,
   onDelete,
+  onGenerateRelated,
 }: {
   word: Word;
   progress?: Progress;
   onClose: () => void;
   onEdit: (word: Word) => void;
   onDelete: (word: Word) => void;
+  onGenerateRelated?: (word: Word) => void;
 }) {
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-[#17231f]/40 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -74,6 +76,16 @@ export function WordModal({
             >
               <Trash2 size={15} /> Xóa
             </button>
+            {onGenerateRelated && (
+              <button
+                type="button"
+                onClick={() => onGenerateRelated(word)}
+                className="flex items-center gap-1.5 rounded-xl border border-[#c4dc80] bg-[#f5fad9] px-3.5 py-2.5 text-sm font-semibold text-[#48631b] hover:bg-[#ecf5c5] transition"
+                title="Tạo các từ vựng cùng chủ đề với từ này bằng Gemini AI"
+              >
+                <Sparkles size={15} className="text-[#6d8a26]" /> Từ cùng chủ đề
+              </button>
+            )}
             <button
               type="button"
               onClick={() => speak(word.word)}

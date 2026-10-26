@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { BookOpen, ListFilter, Plus, Search } from 'lucide-react';
+import { BookOpen, ListFilter, Plus, Search, Sparkles } from 'lucide-react';
 import { useVocabulary } from '@/context/VocabularyContext';
 import { WordCard } from '@/components/word/WordCard';
 
 export function LibraryPage() {
-  const { words, progressMap, setSelectedWord, setEditingWord, setDeletingWord, setIsAddModalOpen } = useVocabulary();
+  const {
+    words,
+    progressMap,
+    setSelectedWord,
+    setEditingWord,
+    setDeletingWord,
+    setIsAddModalOpen,
+    setIsAiModalOpen,
+  } = useVocabulary();
   const [search, setSearch] = useState('');
 
   const filtered = words.filter((word) =>
@@ -24,6 +32,13 @@ export function LibraryPage() {
             <div className="rounded-xl bg-[#e8f2cf] px-4 py-3 text-sm font-bold text-[#57711f]">
               <BookOpen className="mr-2 inline" size={16} /> {filtered.length} kết quả
             </div>
+            <button
+              type="button"
+              onClick={() => setIsAiModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl border border-[#b9cf78] bg-[#f2f8dc] px-4 py-3 text-sm font-bold text-[#425d18] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#e7f2c6]"
+            >
+              <Sparkles size={16} className="text-[#6d8a25]" /> Tạo từ bằng AI
+            </button>
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
@@ -65,13 +80,22 @@ export function LibraryPage() {
           <ListFilter className="mx-auto mb-3 text-[#a9b6a9]" />
           <p className="font-semibold text-[#718078]">Không tìm thấy từ phù hợp</p>
           <p className="mt-1 text-sm text-[#9aa69e]">Thử thay đổi từ khóa tìm kiếm hoặc bấm thêm từ mới vào kho.</p>
-          <button
-            type="button"
-            onClick={() => setIsAddModalOpen(true)}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#263f31] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#172c20]"
-          >
-            <Plus size={16} /> Thêm từ mới ngay
-          </button>
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAiModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#b9cf78] bg-[#f2f8dc] px-4 py-2.5 text-sm font-bold text-[#425d18] transition hover:bg-[#e7f2c6]"
+            >
+              <Sparkles size={16} className="text-[#6d8a25]" /> Tạo từ cùng chủ đề với AI
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#263f31] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#172c20]"
+            >
+              <Plus size={16} /> Thêm từ thủ công
+            </button>
+          </div>
         </div>
       )}
     </div>
