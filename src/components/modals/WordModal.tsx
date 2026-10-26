@@ -1,6 +1,7 @@
 import { Headphones, Pencil, Trash2, X } from 'lucide-react';
 import type { Progress, Word } from '@/types';
 import { speak } from '@/utils/speech';
+import { getRemainingReviewTime } from '@/utils/srs';
 
 export function WordModal({
   word,
@@ -50,7 +51,13 @@ export function WordModal({
         )}
         <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-[#87938b]">
-            {progress?.status === 'mastered' ? 'Đã thuộc' : progress?.status === 'learning' ? 'Đang học' : 'Chưa học'}
+            {progress?.status === 'mastered'
+              ? `Đã thuộc • ${getRemainingReviewTime(progress)}`
+              : progress?.status === 'learning'
+              ? progress.review_count > 0
+                ? `Cần ôn lại (${progress.correct_count}/3)`
+                : `Đang học (${progress.correct_count}/3)`
+              : 'Chưa học'}
           </span>
           <div className="flex items-center gap-2">
             <button

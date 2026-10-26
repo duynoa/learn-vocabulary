@@ -1,6 +1,7 @@
 import { Headphones, Pencil, Trash2 } from 'lucide-react';
 import type { Progress, Word } from '@/types';
 import { speak } from '@/utils/speech';
+import { getRemainingReviewTime } from '@/utils/srs';
 
 export function WordCard({
   word,
@@ -26,7 +27,16 @@ export function WordCard({
             {word.part_of_speech || 'word'}
           </span>
           <span
-            className={`h-2 w-2 rounded-full ${
+            title={
+              progress?.status === 'mastered'
+                ? `Đã thuộc • ${getRemainingReviewTime(progress)}`
+                : progress?.status === 'learning'
+                ? progress.review_count > 0
+                  ? `Cần ôn lại (${progress.correct_count}/3)`
+                  : `Đang học (${progress.correct_count}/3)`
+                : 'Chưa học'
+            }
+            className={`h-2.5 w-2.5 rounded-full ${
               progress?.status === 'mastered'
                 ? 'bg-[#8fb44a]'
                 : progress?.status === 'learning'

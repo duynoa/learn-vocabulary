@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { NewWord, Progress, Word } from '@/types';
+import { isProgressExpired } from '@/utils/srs';
 
 interface VocabularyContextType {
   words: Word[];
@@ -55,24 +56,67 @@ export function VocabularyProvider({ children }: { children: React.ReactNode }) 
       if (wordsResult.error || progressResult.error) {
         setError('Không thể tải dữ liệu. Vui lòng thử lại.');
       } else {
+        const rawProgress = (progressResult.data ?? []) as Progress[];
+        const expiredToSync: Progress[] = [];
+        const processedProgress = rawProgress.map((item) => {
+          if (isProgressExpired(item)) {
+            const expiredItem: Progress = {
+              ...item,
+              status: 'learning',
+              correct_count: 0,
+            };
+            expiredToSync.push(expiredItem);
+            return expiredItem;
+          }
+          return item;
+        });
+
         setWords((wordsResult.data ?? []) as Word[]);
-        setProgress((progressResult.data ?? []) as Progress[]);
+        setProgress(processedProgress);
+
+        // Tự động đồng bộ các từ hết hạn lên database
+        if (expiredToSync.length > 0) {
+          void supabase.from('progress').upsert(
+            expiredToSync.map((item) => ({
+              word_id: item.word_id,
+              status: 'learning',
+              correct_count: 0,
+              review_count: item.review_count,
+              last_reviewed_at: item.last_reviewed_at,
+            })),
+            { onConflict: 'word_id' }
+          );
+        }
       }
       setLoading(false);
     }
     void load();
   }, []);
 
-  const progressMap = useMemo(() => new Map(progress.map((item) => [item.word_id, item])), [progress]);
-  const mastered = progress.filter((item) => item.status === 'mastered').length;
-  const learning = progress.filter((item) => item.status === 'learning').length;
-  const studiedToday = progress.filter(
+  // Tính toán tiến độ hiệu lực (tự động chuyển từ đã quá hạn sang 'learning' và correct_count = 0)
+  const effectiveProgress = useMemo(() => {
+    return progress.map((item) => {
+      if (isProgressExpired(item)) {
+        return {
+          ...item,
+          status: 'learning' as const,
+          correct_count: 0,
+        };
+      }
+      return item;
+    });
+  }, [progress]);
+
+  const progressMap = useMemo(() => new Map(effectiveProgress.map((item) => [item.word_id, item])), [effectiveProgress]);
+  const mastered = effectiveProgress.filter((item) => item.status === 'mastered').length;
+  const learning = effectiveProgress.filter((item) => item.status === 'learning').length;
+  const studiedToday = effectiveProgress.filter(
     (item) => item.last_reviewed_at && new Date(item.last_reviewed_at).toDateString() === new Date().toDateString()
   ).length;
-  const accuracy = progress.length
+  const accuracy = effectiveProgress.length
     ? Math.round(
-        (progress.reduce((sum, item) => sum + (item.review_count ? item.correct_count / item.review_count : 0), 0) /
-          progress.length) *
+        (effectiveProgress.reduce((sum, item) => sum + (item.review_count ? item.correct_count / item.review_count : 0), 0) /
+          effectiveProgress.length) *
           100
       )
     : 0;
