@@ -49,6 +49,8 @@ export function WordForm({
   const [validation, setValidation] = useState('');
   const debounceTimer = useRef<number | null>(null);
 
+  const isPronunciationEdited = useRef(false);
+
   useEffect(() => {
     if (initialWord) {
       setForm({
@@ -62,6 +64,7 @@ export function WordForm({
       setIsCustomPartOfSpeech(
         Boolean(initialWord.part_of_speech && !commonPartsOfSpeech.includes(initialWord.part_of_speech))
       );
+      isPronunciationEdited.current = Boolean(initialWord.pronunciation);
     } else {
       setForm({
         word: '',
@@ -72,6 +75,7 @@ export function WordForm({
         example_vi: '',
       });
       setIsCustomPartOfSpeech(false);
+      isPronunciationEdited.current = false;
     }
     setValidation('');
     setLookupMessage('');
@@ -93,148 +97,225 @@ export function WordForm({
     }
   }
 
-  // Tự động tra cứu từ điển với cơ chế đa nguồn (tránh lỗi 522 của dictionaryapi.dev)
+  // Tra cứu dữ liệu cho một từ đơn lẻ từ 3 nguồn từ điển
+  async function lookupSingleWord(word: string): Promise<{ ipa: string; pos: string; example: string }> {
+    const clean = word.trim().toLowerCase().replace(/^[^a-z0-9']+|[^a-z0-9']+$/gi, '');
+    if (!clean) return { ipa: '', pos: '', example: '' };
+
+    let ipa = '';
+    let pos = '';
+    let example = '';
+
+    // Nguồn 1: freedictionaryapi.com (Miễn phí, phản hồi nhanh, không bị 522 Cloudflare)
+    try {
+      const response = await fetchWithTimeout(
+        `https://freedictionaryapi.com/api/v1/entries/en/${encodeURIComponent(clean)}`,
+        3500
+      );
+      if (response.ok) {
+        interface FreeDictEntry {
+          partOfSpeech?: string;
+          pronunciations?: Array<{ type?: string; text?: string }>;
+          senses?: Array<{ definition?: string; examples?: string[] }>;
+        }
+        interface FreeDictData {
+          entries?: FreeDictEntry[];
+        }
+        const json = (await response.json()) as FreeDictData;
+        if (Array.isArray(json.entries) && json.entries.length > 0) {
+          const entry = json.entries[0];
+          pos = entry.partOfSpeech || '';
+          const ipaFound =
+            entry.pronunciations?.find((p) => p.type === 'ipa' && p.text) ||
+            entry.pronunciations?.find((p) => p.text) ||
+            entry.pronunciations?.[0];
+          ipa = ipaFound?.text || '';
+
+          for (const item of json.entries) {
+            if (item.senses) {
+              for (const sense of item.senses) {
+                if (sense.examples && sense.examples.length > 0 && sense.examples[0]) {
+                  example = sense.examples[0].split('\n')[0].trim();
+                  break;
+                }
+              }
+            }
+            if (example) break;
+          }
+        }
+      }
+    } catch {
+      // Bỏ qua lỗi nguồn 1
+    }
+
+    // Nguồn 2: Datamuse API (Rất ổn định, dự phòng phát âm IPA & từ loại)
+    if (!ipa || !pos) {
+      try {
+        const response = await fetchWithTimeout(
+          `https://api.datamuse.com/words?sp=${encodeURIComponent(clean)}&md=dpr&ipa=1&max=1`,
+          3000
+        );
+        if (response.ok) {
+          interface DatamuseItem {
+            tags?: string[];
+            defs?: string[];
+          }
+          const items = (await response.json()) as DatamuseItem[];
+          if (Array.isArray(items) && items.length > 0) {
+            const item = items[0];
+            if (!ipa && item.tags) {
+              const ipaTag = item.tags.find((t) => t.startsWith('ipa_pron:'));
+              if (ipaTag) {
+                ipa = `/${ipaTag.replace('ipa_pron:', '').trim()}/`;
+              }
+            }
+            if (!pos && item.tags) {
+              if (item.tags.includes('n')) pos = 'noun';
+              else if (item.tags.includes('v')) pos = 'verb';
+              else if (item.tags.includes('adj')) pos = 'adjective';
+              else if (item.tags.includes('adv')) pos = 'adverb';
+            }
+          }
+        }
+      } catch {
+        // Bỏ qua lỗi fallback
+      }
+    }
+
+    // Nguồn 3: api.dictionaryapi.dev (Timeout ngắn 2.5s để không làm treo ứng dụng nếu bị 522)
+    if (!ipa || !pos || !example) {
+      try {
+        const response = await fetchWithTimeout(
+          `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(clean)}`,
+          2500
+        );
+        if (response.ok) {
+          interface DictPhonetic { text?: string }
+          interface DictDefinition { example?: string }
+          interface DictMeaning { partOfSpeech?: string; definitions?: DictDefinition[] }
+          interface DictEntry { phonetic?: string; phonetics?: DictPhonetic[]; meanings?: DictMeaning[] }
+
+          const data = (await response.json()) as DictEntry[];
+          if (Array.isArray(data) && data.length > 0) {
+            const item = data[0];
+            if (!ipa) ipa = item.phonetic || item.phonetics?.find((p) => p.text)?.text || '';
+            if (!pos) pos = item.meanings?.[0]?.partOfSpeech || '';
+            if (!example && Array.isArray(item.meanings)) {
+              for (const m of item.meanings) {
+                for (const d of m.definitions || []) {
+                  if (d.example) {
+                    example = d.example;
+                    break;
+                  }
+                }
+                if (example) break;
+              }
+            }
+          }
+        }
+      } catch {
+        // Bỏ qua lỗi 522 / timeout từ dictionaryapi.dev
+      }
+    }
+
+    return { ipa, pos, example };
+  }
+
+  // Tự động tra cứu từ điển hỗ trợ cả từ đơn và cụm từ 2-3 chữ (như "check email", "give up")
   async function fetchDictionaryData(wordToSearch: string, isManual = false) {
     const trimmed = wordToSearch.trim();
-    if (!trimmed || trimmed.includes(' ')) {
-      if (isManual) setLookupMessage('Vui lòng nhập từ đơn để tự động tra cứu từ điển.');
+    if (!trimmed) {
+      if (isManual) setLookupMessage('Vui lòng nhập từ hoặc cụm từ để tự động tra cứu từ điển.');
       return;
+    }
+
+    if (isManual) {
+      isPronunciationEdited.current = false;
     }
 
     setLookingUp(true);
     setLookupMessage('');
     try {
+      const tokens = trimmed.split(/\s+/).filter(Boolean);
       let ipa = '';
       let pos = '';
       let example = '';
       let found = false;
 
-      // Nguồn 1: freedictionaryapi.com (Miễn phí, phản hồi nhanh, không bị 522 Cloudflare)
-      try {
-        const response = await fetchWithTimeout(
-          `https://freedictionaryapi.com/api/v1/entries/en/${encodeURIComponent(trimmed.toLowerCase())}`,
-          3500
-        );
-        if (response.ok) {
-          interface FreeDictEntry {
-            partOfSpeech?: string;
-            pronunciations?: Array<{ type?: string; text?: string }>;
-            senses?: Array<{ definition?: string; examples?: string[] }>;
-          }
-          interface FreeDictData {
-            entries?: FreeDictEntry[];
-          }
-          const json = (await response.json()) as FreeDictData;
-          if (Array.isArray(json.entries) && json.entries.length > 0) {
-            const entry = json.entries[0];
-            pos = entry.partOfSpeech || '';
-            const ipaFound = entry.pronunciations?.find((p) => p.type === 'ipa' && p.text) || entry.pronunciations?.[0];
-            ipa = ipaFound?.text || '';
+      if (tokens.length === 1) {
+        const singleResult = await lookupSingleWord(tokens[0]);
+        ipa = singleResult.ipa;
+        pos = singleResult.pos;
+        example = singleResult.example;
+        found = Boolean(ipa || pos || example);
+      } else {
+        // Cụm từ 2, 3 từ trở lên (ví dụ: "check email", "ice cream", "give up", "look forward to")
+        // Bước 1: Thử tra cứu nguyên cả cụm từ trước xem có định nghĩa sẵn không
+        const wholePhraseResult = await lookupSingleWord(trimmed);
+        if (wholePhraseResult.ipa) {
+          ipa = wholePhraseResult.ipa;
+          pos = wholePhraseResult.pos || 'phrase';
+          example = wholePhraseResult.example;
+          found = true;
+        } else {
+          // Bước 2: Tra cứu song song từng từ đơn lẻ và ghép phiên âm lại
+          const wordResults = await Promise.all(tokens.map((tok) => lookupSingleWord(tok)));
 
-            for (const item of json.entries) {
-              if (item.senses) {
-                for (const sense of item.senses) {
-                  if (sense.examples && sense.examples.length > 0 && sense.examples[0]) {
-                    example = sense.examples[0].split('\n')[0].trim();
-                    break;
-                  }
-                }
-              }
-              if (example) break;
+          // Ghép phát âm IPA của từng từ: loại bỏ dấu gạch chéo dư thừa và ghép lại
+          const cleanIpas = wordResults.map((r, i) => {
+            if (r.ipa) {
+              return r.ipa.trim().replace(/^[/[\]]+|[/[\]]+$/g, '').trim();
             }
+            return tokens[i];
+          });
+
+          const hasAnyIpa = wordResults.some((r) => Boolean(r.ipa));
+          if (hasAnyIpa) {
+            ipa = `/${cleanIpas.join(' ')}/`;
             found = true;
           }
-        }
-      } catch {
-        // Nguồn 1 timeout hoặc lỗi mạng
-      }
 
-      // Nguồn 2: Datamuse API (Rất ổn định, dự phòng phát âm IPA & từ loại)
-      if (!found || !ipa) {
-        try {
-          const response = await fetchWithTimeout(
-            `https://api.datamuse.com/words?sp=${encodeURIComponent(trimmed.toLowerCase())}&md=dp&ipa=1&max=1`,
-            3000
-          );
-          if (response.ok) {
-            interface DatamuseItem {
-              tags?: string[];
-              defs?: string[];
-            }
-            const items = (await response.json()) as DatamuseItem[];
-            if (Array.isArray(items) && items.length > 0) {
-              const item = items[0];
-              if (!ipa && item.tags) {
-                const ipaTag = item.tags.find((t) => t.startsWith('ipa_pron:'));
-                if (ipaTag) {
-                  ipa = `/${ipaTag.replace('ipa_pron:', '').trim()}/`;
-                }
-              }
-              if (!pos && item.tags) {
-                if (item.tags.includes('n')) pos = 'noun';
-                else if (item.tags.includes('v')) pos = 'verb';
-                else if (item.tags.includes('adj')) pos = 'adjective';
-                else if (item.tags.includes('adv')) pos = 'adverb';
-              }
-              found = true;
+          // Xác định từ loại cho cụm từ
+          if (wholePhraseResult.pos) {
+            pos = wholePhraseResult.pos;
+          } else {
+            const firstPos = wordResults[0]?.pos;
+            const commonPreps = ['up', 'down', 'in', 'out', 'on', 'off', 'over', 'away', 'back', 'after', 'for', 'about'];
+            if (firstPos === 'verb' && tokens.length === 2 && commonPreps.includes(tokens[1].toLowerCase())) {
+              pos = 'phrasal verb';
+            } else {
+              pos = 'phrase';
             }
           }
-        } catch {
-          // Bỏ qua lỗi fallback
-        }
-      }
 
-      // Nguồn 3: api.dictionaryapi.dev (Timeout ngắn 2.5s để không làm treo ứng dụng nếu bị 522)
-      if (!found || !example) {
-        try {
-          const response = await fetchWithTimeout(
-            `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(trimmed.toLowerCase())}`,
-            2500
-          );
-          if (response.ok) {
-            interface DictPhonetic { text?: string }
-            interface DictDefinition { example?: string }
-            interface DictMeaning { partOfSpeech?: string; definitions?: DictDefinition[] }
-            interface DictEntry { phonetic?: string; phonetics?: DictPhonetic[]; meanings?: DictMeaning[] }
-
-            const data = (await response.json()) as DictEntry[];
-            if (Array.isArray(data) && data.length > 0) {
-              const item = data[0];
-              if (!ipa) ipa = item.phonetic || item.phonetics?.find((p) => p.text)?.text || '';
-              if (!pos) pos = item.meanings?.[0]?.partOfSpeech || '';
-              if (!example && Array.isArray(item.meanings)) {
-                for (const m of item.meanings) {
-                  for (const d of m.definitions || []) {
-                    if (d.example) {
-                      example = d.example;
-                      break;
-                    }
-                  }
-                  if (example) break;
-                }
-              }
-              found = true;
-            }
-          }
-        } catch {
-          // Bỏ qua lỗi 522 / timeout từ dictionaryapi.dev
+          example = wholePhraseResult.example || '';
         }
       }
 
       if (!found && !ipa && !pos) {
-        if (isManual) setLookupMessage('Không tìm thấy từ điển cho từ này. Bạn có thể tự nhập phiên âm bên dưới.');
+        if (isManual) setLookupMessage('Không tìm thấy từ điển cho từ/cụm từ này. Bạn có thể tự nhập phiên âm bên dưới.');
         return;
       }
 
       setForm((prev) => ({
         ...prev,
-        pronunciation: prev.pronunciation || ipa,
-        part_of_speech: prev.part_of_speech === 'noun' && pos ? pos : prev.part_of_speech,
+        pronunciation:
+          isManual || !isPronunciationEdited.current || !prev.pronunciation
+            ? ipa || prev.pronunciation
+            : prev.pronunciation,
+        part_of_speech:
+          prev.part_of_speech === 'noun' || isManual || (tokens.length > 1 && ['noun', 'verb'].includes(prev.part_of_speech))
+            ? (pos || prev.part_of_speech)
+            : prev.part_of_speech,
         example_en: prev.example_en || example,
       }));
 
-      if (pos && !commonPartsOfSpeech.includes(pos)) {
-        setIsCustomPartOfSpeech(true);
+      if (pos) {
+        if (!commonPartsOfSpeech.includes(pos)) {
+          setIsCustomPartOfSpeech(true);
+        } else {
+          setIsCustomPartOfSpeech(false);
+        }
       }
 
       setLookupMessage('✨ Đã tự động lấy phát âm & loại từ từ từ điển!');
@@ -248,11 +329,15 @@ export function WordForm({
 
   function handleWordChange(val: string) {
     update('word', val);
+    if (!val.trim()) {
+      isPronunciationEdited.current = false;
+    }
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    if (val.trim().length >= 2 && !val.trim().includes(' ')) {
+    const trimmed = val.trim();
+    if (trimmed.length >= 2) {
       debounceTimer.current = window.setTimeout(() => {
-        void fetchDictionaryData(val);
-      }, 800);
+        void fetchDictionaryData(trimmed);
+      }, 700);
     }
   }
 
@@ -330,7 +415,10 @@ export function WordForm({
           <div className="relative">
             <input
               value={form.pronunciation}
-              onChange={(event) => update('pronunciation', event.target.value)}
+              onChange={(event) => {
+                isPronunciationEdited.current = true;
+                update('pronunciation', event.target.value);
+              }}
               placeholder="/ˌser.ənˈdɪp.ə.ti/"
               className={`${inputClass} pr-10`}
             />
@@ -428,6 +516,7 @@ export function WordForm({
           <button
             type="button"
             onClick={() => {
+              isPronunciationEdited.current = false;
               setForm({
                 word: '',
                 pronunciation: '',

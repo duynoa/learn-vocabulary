@@ -1,26 +1,49 @@
 import { useMemo, useState } from 'react';
 import { Check, RotateCcw, Trophy, X } from 'lucide-react';
 import { useVocabulary } from '@/context/VocabularyContext';
+import { EmptyState } from '@/components/common/EmptyState';
+import { speak } from '@/utils/speech';
 import type { Word } from '@/types';
+
+function shuffleArray<T>(array: T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
 
 export function QuizPage() {
   const { words, updateWordProgress } = useVocabulary();
+  const [sessionKey, setSessionKey] = useState(0);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
 
-  const quizWords = words.slice(0, 10);
+  const quizWords = useMemo(() => {
+    void sessionKey;
+    if (words.length === 0) return [];
+    return shuffleArray(words).slice(0, 10);
+  }, [words, sessionKey]);
+
   const question = quizWords[index];
 
   const options = useMemo(() => {
     if (!question) return [];
-    const others = words
-      .filter((word) => word.id !== question.id)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3);
-    return [question, ...others].sort(() => Math.random() - 0.5);
+    const others = shuffleArray(words.filter((word) => word.id !== question.id)).slice(0, 3);
+    return shuffleArray([question, ...others]);
   }, [question, words]);
+
+  if (words.length === 0) {
+    return (
+      <EmptyState
+        title="Chưa có từ vựng nào"
+        text="Hãy thêm từ mới vào thư viện để bắt đầu bài trắc nghiệm nhé!"
+      />
+    );
+  }
 
   if (done || !question) {
     return (
@@ -39,6 +62,7 @@ export function QuizPage() {
             setScore(0);
             setSelected(null);
             setDone(false);
+            setSessionKey((prev) => prev + 1);
           }}
           className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#263f31] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#172c20]"
         >
@@ -50,6 +74,7 @@ export function QuizPage() {
 
   const choose = async (option: Word) => {
     if (selected) return;
+    speak(option.word);
     const correct = option.id === question.id;
     setSelected(option.id);
     if (correct) setScore((current) => current + 1);
@@ -60,7 +85,7 @@ export function QuizPage() {
         setIndex((current) => current + 1);
         setSelected(null);
       }
-    }, 700);
+    }, 850);
   };
 
   return (
